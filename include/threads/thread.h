@@ -9,6 +9,17 @@
 #include "vm/vm.h"
 #endif
 
+/* -------------- project2-3-1_System calls-File Descriptor ------------- */
+#include "threads/synch.h"
+/* -------------- project2-3-1_System calls-File Descriptor ------------- */
+
+/* ----------------------------------- project1 ----------------------------------- */
+// THREAD_BLOCKED 상태의 스레드를 관리하기 위한 리스트 자료 구조 추가
+static struct list sleep_list;
+
+// sleep_list에서 대기중인 스레드들의 wakeup_tick 값중 최소값을 저장하기 위한 변수
+static int64_t next_tick_to_awake;
+/* ----------------------------------- project1 ----------------------------------- */
 
 /* States in a thread's life cycle. */
 enum thread_status {
@@ -114,19 +125,45 @@ struct thread {
 	int64_t wakeup_tick;
 	/* -------------- project1 ------------- */
 
-	/* -------------- project1-2_3 ------------- */
+	/* -------------- project1-2-3_Priority Inversion Problem ------------- */
 	// donation 이후 우선순위를 초기화하기 위해 초기값 저장
 	int init_priority;
 	// 해당 스레드가 대기하고 있는 lock 자료구조의 주소를 저장
-	// hread가 원하는 lock을 이미 다른 thread가 점유하고 있으면 lock의 주소를 저장함
 	struct lock *wait_on_lock;
 	// multiple donation을 고려하기 위해 사용
-	// A thread가 B thread에 의해 priority가 변경됐다면 A thread의 list donations에 B 스레드를 기억해놓음
 	struct list donations;
 	// multiple donation을 고려하기 위해 사용
-	// B thread는 A thread의 기부자 목록에 자신 이름 새겨놓아야함
 	struct list_elem donation_elem;
-	/* -------------- project1-2_3 ------------- */
+	/* -------------- project1-2-3_Priority Inversion Problem ------------- */
+
+	/* -------------- project2-3-1_System calls-File Descriptor ------------- */
+	// 각 프로세스가 가지고 있는 파일 디스크립터 테이블
+	struct file **file_descriptor_talbe;
+	// 파일 디스크립터 테이블에 접근하기 위한 인덱스 넘버
+	int file_descriptor_index;
+	/* -------------- project2-3-1_System calls-File Descriptor ------------- */
+
+	/* -------------- project2-3-2_System calls-Process ------------- */
+	// 프로세스의 종료 상태
+	int exit_status;
+
+	// 부모 프로세스의 파일 디스크립터
+	// 부모 스레드의 사용자 스택의 정보를 담고 있는 인터럽트 프레임
+	// 나중에 해당 부분을 받아와서 
+	struct intr_frame child_if;
+	// 자식 리스트
+	struct list child_list;
+	// 자식 프로세스의 element
+	struct list_elem child_elem;
+
+	// 실행중인 파일
+	struct file *running_file;
+
+	// 프로세스 대기를 위한 세마포어
+	struct semaphore fork_sys_sema;
+	struct semaphore wait_sys_sema;
+	struct semaphore exit_sys_sema;
+	/* -------------- project2-3-2_System calls-Process ------------- */
 };
 
 /* If false (default), use round-robin scheduler.
@@ -163,22 +200,16 @@ int thread_get_load_avg (void);
 
 void do_iret (struct intr_frame *tf);
 
-/* ------------------------------ project1 ------------------------------ */
+/* ------------------------------ project1-1_Alarm Clock ------------------------------ */
 void thread_sleep (int64_t ticks);
 void update_next_tick_to_awake(int64_t ticks);
 int64_t get_next_tick_to_awake(void);
 void thread_awake(int64_t ticks);
-/* ------------------------------ project1 ------------------------------ */
+/* ------------------------------ project1-1_Alarm Clock ------------------------------ */
 
-/* ------------------------------ project1-2 ------------------------------ */
+/* ------------------------------ project1-2_Priority Scheduling ------------------------------ */
 bool cmp_priority(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
 void test_max_priority(void);
-/* ------------------------------ project1-2 ------------------------------ */
-
-/* ------------------------------ project1-2_3 ------------------------------ */
-void donate_priority(void);
-void remove_with_lock(struct lock *lock);
-void refresh_priority(void);
-/* ------------------------------ project1-2_3 ------------------------------ */
+/* ------------------------------ project1-2_Priority Scheduling ------------------------------ */
 
 #endif /* threads/thread.h */

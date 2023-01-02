@@ -68,10 +68,10 @@ sema_down (struct semaphore *sema) {
 	while (sema->value == 0) {
 		// 기존 코드
 		// list_push_back (&sema->waiters, &thread_current ()->elem);
-		/* ------------------------------ project1-2_2 ------------------------------ */
+		/* ------------------------------ project1-2-2_Priority Scheduling and Synchronization ------------------------------ */
 		// semaphore를 얻고 waiters 리스트 삽입시, 우선순위대로 삽입되도록 수정
 		list_insert_ordered(&sema->waiters, &thread_current()->elem, cmp_priority, NULL);
-		/* ------------------------------ project1-2_2 ------------------------------ */
+		/* ------------------------------ project1-2-2_Priority Scheduling and Synchronization ------------------------------ */
 
 		thread_block ();
 	}
@@ -116,14 +116,14 @@ sema_up (struct semaphore *sema) {
 
 	old_level = intr_disable ();
 	if (!list_empty (&sema->waiters)){
-		/* ------------------------------ project1-2_2 ------------------------------ */
+		/* ------------------------------ project1-2-2_Priority Scheduling and Synchronization ------------------------------ */
 		// 스레드가 waiters list에 있는 동안 우선순위가 변경되었을 경우를 고려하여 waiters list를 우선 순위로 정렬
 		list_sort(&sema->waiters, cmp_priority, NULL);
 		/* ------------------------------ project1-2_2 ------------------------------ */
 		thread_unblock (list_entry (list_pop_front (&sema->waiters), struct thread, elem));
 	}
 	sema->value++;
-	/* ------------------------------ project1-2_2 ------------------------------ */
+	/* ------------------------------ project1-2-2_Priority Scheduling and Synchronization ------------------------------ */
 	// priority preemption 코드 추가
 	/* 
 		- 스레드의 우선순위가 변경되었을때, 우선 순위에 따라 선점이 발생되도록 함
@@ -131,7 +131,7 @@ sema_up (struct semaphore *sema) {
 		- ready_list에서 우선순위가 가장 높은 스레드와 현재 스레드의 우선순위를 비교하여 스케줄링
 	*/
 	test_max_priority();
-	/* ------------------------------ project1-2_2 ------------------------------ */
+	/* ------------------------------ project1-2-2_Priority Scheduling and Synchronization ------------------------------ */
 	intr_set_level (old_level);
 }
 
@@ -210,7 +210,7 @@ lock_acquire (struct lock *lock) {
 	ASSERT (!lock_held_by_current_thread (lock));
 
 	old_level = intr_disable();
-	/* ------------------------------ project1-2_3 ------------------------------ */
+	/* ------------------------------ project1-2-3_Priority Inversion Problem ------------------------------ */
 	// 해당 lcok에 holder가 존재한다면 아래의 작업을 수행
 	// 현재 스레드의 wait_on_lock 변수에 획득하기를 기다리는 lock의 주소를 저장
 	// multiple dontion을 고려하기 위해 이전 상태의 우선순위 기억,
@@ -218,19 +218,20 @@ lock_acquire (struct lock *lock) {
 	// priority dontaion을 수행하기 위해 donate_prioriry()를 수행
 	if(lock->holder != NULL){
 		thread_current()->wait_on_lock = lock;
-		list_insert_ordered(&lock->holder->donations, &thread_current()->donation_elem, cmp_priority, NULL);
+		// list_insert_ordered(&lock->holder->donations, &th->donation_elem, cmp_priority, NULL);
+		list_push_back(&lock->holder->donations, &thread_current()->donation_elem);
 		donate_priority();
 	}
-	/* ------------------------------ project1-2_3 ------------------------------ */
+	/* ------------------------------ project1-2-3_Priority Inversion Problem ------------------------------ */
 
 	sema_down (&lock->semaphore);
 
-	/* ------------------------------ project1-2_3 ------------------------------ */
+	/* ------------------------------ project1-2-3_Priority Inversion Problem ------------------------------ */
 	// lock->holder = thread_current ();
 	// lock을 획득한 후 lock holder를 갱신
 	thread_current()->wait_on_lock = NULL;
 	lock->holder = thread_current();
-	/* ------------------------------ project1-2_3 ------------------------------ */
+	/* ------------------------------ project1-2-3_Priority Inversion Problem ------------------------------ */
 	intr_set_level(old_level);
 
 }
@@ -267,10 +268,10 @@ lock_release (struct lock *lock) {
 	ASSERT (lock != NULL);
 	ASSERT (lock_held_by_current_thread (lock));
 
-	/* ------------------------------ project1-2_3 ------------------------------ */
+	/* ------------------------------ project1-2-3_Priority Inversion Problem ------------------------------ */
 	remove_with_lock(lock);
 	refresh_priority();
-	/* ------------------------------ project1-2_3 ------------------------------ */
+	/* ------------------------------ project1-2-3_Priority Inversion Problem ------------------------------ */
 
 	lock->holder = NULL;
 	sema_up (&lock->semaphore);
@@ -291,25 +292,6 @@ struct semaphore_elem {
 	struct list_elem elem;              /* List element. */
 	struct semaphore semaphore;         /* This semaphore. */
 };
-
-/* ------------------------------ project1-2_2 ------------------------------ */
-// 첫번째 인자의 우선순위가 두번째 인자의 우선순위보다 높으면 1을 반환, 낮으면 0을 반환
-// 해당 condition vatiable을 가지는 세마포어 리스트를 가장 높은 우선 순위를 가지는 스레드의 수선순위 순으로 정렬하도록 구현
-// 주의! struct semaphore_elem 밑에 선언을 해야함
-bool
-cmp_sem_priority (const struct list_elem *a, const struct list_elem *b, void *aux UNUSED){
-	struct semaphore_elem *sa = list_entry(a, struct semaphore_elem, elem);
-	struct semaphore_elem *sb = list_entry(b, struct semaphore_elem, elem);
-
-	struct list_elem *sa_el = list_begin(&sa->semaphore.waiters);
-	struct list_elem *sb_el = list_begin(&sb->semaphore.waiters);
-
-	struct thread *sa_el_th = list_entry(sa_el, struct thread, elem);
-	struct thread *sb_el_th = list_entry(sb_el, struct thread, elem);
-
-	return (sa_el_th->priority > sb_el_th->priority ? true : false);
-}
-/* ------------------------------ project1-2_2 ------------------------------ */
 
 /* Initializes condition variable COND.  A condition variable
    allows one piece of code to signal a condition and cooperating
@@ -351,13 +333,13 @@ cond_wait (struct condition *cond, struct lock *lock) {
 	ASSERT (lock_held_by_current_thread (lock));
 
 	sema_init (&waiter.semaphore, 0);
-
+	
 	// 기존 코드
 	// list_push_back (&cond->waiters, &waiter.elem);
-	/* ------------------------------ project1-2_2 ------------------------------ */
+	/* ------------------------------ project1-2-2_Priority Scheduling and Synchronization ------------------------------ */
 	// condition variable의 waiters list에 우선순위로 삽입되도록 수정
 	list_insert_ordered(&cond->waiters, &waiter.elem, cmp_sem_priority, NULL);
-	/* ------------------------------ project1-2_2 ------------------------------ */
+	/* ------------------------------ project1-2-2_Priority Scheduling and Synchronization ------------------------------ */
 
 	lock_release (lock);
 	sema_down (&waiter.semaphore);
@@ -379,10 +361,10 @@ cond_signal (struct condition *cond, struct lock *lock UNUSED) {
 	ASSERT (lock_held_by_current_thread (lock));
 
 	if (!list_empty (&cond->waiters)){
-		/* ------------------------------ project1-2_2 ------------------------------ */
+		/* ------------------------------ project1-2-2_Priority Scheduling and Synchronization ------------------------------ */
 		// condition variable의 waiters list를 우선순위로 재 정렬
 		list_sort(&cond->waiters, cmp_sem_priority, NULL);
-		/* ------------------------------ project1-2_2 ------------------------------ */
+		/* ------------------------------ project1-2-2_Priority Scheduling and Synchronization ------------------------------ */
 		sema_up (&list_entry (list_pop_front (&cond->waiters), struct semaphore_elem, elem)->semaphore);
 	}
 }
@@ -401,3 +383,22 @@ cond_broadcast (struct condition *cond, struct lock *lock) {
 	while (!list_empty (&cond->waiters))
 		cond_signal (cond, lock);
 }
+
+/* ------------------------------ project1-2-2_Priority Scheduling and Synchronization ------------------------------ */
+// 첫번째 인자의 우선순위가 두번째 인자의 우선순위보다 높으면 1을 반환, 낮으면 0을 반환
+// 해당 condition vatiable을 가지는 세마포어 리스트를 가장 높은 우선 순위를 가지는 스레드의 수선순위 순으로 정렬하도록 구현
+// 주의! struct semaphore_elem 밑에 선언을 해야함
+bool
+cmp_sem_priority (const struct list_elem *a, const struct list_elem *b, void *aux UNUSED){
+	struct semaphore_elem *sa = list_entry(a, struct semaphore_elem, elem);
+	struct semaphore_elem *sb = list_entry(b, struct semaphore_elem, elem);
+
+	struct list_elem *sa_el = list_begin(&sa->semaphore.waiters);
+	struct list_elem *sb_el = list_begin(&sb->semaphore.waiters);
+
+	struct thread *sa_el_th = list_entry(sa_el, struct thread, elem);
+	struct thread *sb_el_th = list_entry(sb_el, struct thread, elem);
+
+	return (sa_el_th->priority > sb_el_th->priority ? true : false);
+}
+/* ------------------------------ project1-2-2_Priority Scheduling and Synchronization ------------------------------ */

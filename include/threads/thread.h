@@ -107,6 +107,26 @@ struct thread {
 	/* Owned by thread.c. */
 	struct intr_frame tf;               /* Information for switching */
 	unsigned magic;                     /* Detects stack overflow. */
+
+	/* -------------- project1 ------------- */
+	/* tick till wake up */
+	/* 깨어나야할 tick 저장 */
+	int64_t wakeup_tick;
+	/* -------------- project1 ------------- */
+
+	/* -------------- project1-2_3 ------------- */
+	// donation 이후 우선순위를 초기화하기 위해 초기값 저장
+	int init_priority;
+	// 해당 스레드가 대기하고 있는 lock 자료구조의 주소를 저장
+	// hread가 원하는 lock을 이미 다른 thread가 점유하고 있으면 lock의 주소를 저장함
+	struct lock *wait_on_lock;
+	// multiple donation을 고려하기 위해 사용
+	// A thread가 B thread에 의해 priority가 변경됐다면 A thread의 list donations에 B 스레드를 기억해놓음
+	struct list donations;
+	// multiple donation을 고려하기 위해 사용
+	// B thread는 A thread의 기부자 목록에 자신 이름 새겨놓아야함
+	struct list_elem donation_elem;
+	/* -------------- project1-2_3 ------------- */
 };
 
 /* If false (default), use round-robin scheduler.
@@ -142,5 +162,23 @@ int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
 
 void do_iret (struct intr_frame *tf);
+
+/* ------------------------------ project1 ------------------------------ */
+void thread_sleep (int64_t ticks);
+void update_next_tick_to_awake(int64_t ticks);
+int64_t get_next_tick_to_awake(void);
+void thread_awake(int64_t ticks);
+/* ------------------------------ project1 ------------------------------ */
+
+/* ------------------------------ project1-2 ------------------------------ */
+bool cmp_priority(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
+void test_max_priority(void);
+/* ------------------------------ project1-2 ------------------------------ */
+
+/* ------------------------------ project1-2_3 ------------------------------ */
+void donate_priority(void);
+void remove_with_lock(struct lock *lock);
+void refresh_priority(void);
+/* ------------------------------ project1-2_3 ------------------------------ */
 
 #endif /* threads/thread.h */

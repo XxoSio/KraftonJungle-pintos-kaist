@@ -428,7 +428,7 @@ read (int fd, void *buffer, unsigned size) {
 }
 
 // 시스템 콜 넘버 : 10
-// 버퍼에서 열린파일 fd에 크기 바이트를 씀
+// fd 파일을 열어 버퍼에서 size 바이트 크기만큼 씀
 // file_write() 함수 호출
 // fd : 파일 디스크립터 번호
 // buffer : 기록할 데이터를 저장한 버퍼의 주소 값

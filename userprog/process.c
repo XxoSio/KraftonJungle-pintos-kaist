@@ -215,7 +215,7 @@ __do_fork (void *aux) {
 
 	/* 1. Read the cpu context to local stack. */
 	// 기존 코드
-	// memcpy (&if_, &parent->parent_if, sizeof (struct intr_frame));
+	// memcpy (&if_, parent_if, sizeof (struct intr_frame));
 	// 부모 스레드의 기본 인터럽트 프레임인 tf가 아닌, fork()에서 복사해준
 	// child_if를 복사해야함
 	memcpy (&if_, &parent->child_if, sizeof (struct intr_frame));

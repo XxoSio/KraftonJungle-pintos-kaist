@@ -536,16 +536,21 @@ process_add_file (struct file *f){
 	struct thread *th = thread_current();
 	struct file **curr_fdt = th->file_descriptor_talbe;
 
+	// 최대 값보다 작거나 해당 인덱스가 비어있다면
+	// 인덱스를 하나 늘리면서 비어있는 인덱스 찾기
 	while ((th->file_descriptor_index < FDT_LIMIT) && (curr_fdt[th->file_descriptor_index]))
     {
         th->file_descriptor_index++;
     }
 
-    // error - fd table full
+    // 인덱스가 최대와 같아지거나 커지면 -1 리턴
     if (th->file_descriptor_index >= FDT_LIMIT)
         return -1;
 
+	// 찾은 인덱스에 파일 저장
     curr_fdt[th->file_descriptor_index] = f;
+
+	// 새로운 파일 추가 후 해당 인덱스 리턴
     return th->file_descriptor_index;
 }
 

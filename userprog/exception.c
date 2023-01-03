@@ -145,8 +145,10 @@ page_fault (struct intr_frame *f) {
 	if (vm_try_handle_fault (f, fault_addr, user, write, not_present))
 		return;
 #endif
-	// bad ptr이 들어오는 경우 -1로 종료
+	/* -------------- project2-3-2_System calls-Process ------------- */
+	// page_fault가 발생하는 경우 -1로 종료
 	exit(-1);
+	/* -------------- project2-3-2_System calls-Process ------------- */
 
 	/* Count page faults. */
 	page_fault_cnt++;
@@ -159,4 +161,3 @@ page_fault (struct intr_frame *f) {
 			user ? "user" : "kernel");
 	kill (f);
 }
-

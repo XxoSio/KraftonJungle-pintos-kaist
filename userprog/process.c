@@ -655,7 +655,7 @@ load (const char *file_name, struct intr_frame *if_) {
 	/* -------------- project2-3-2_System calls-Process ------------- */
 	// 실행중인 파일 저장
 	t->running_file = file;
-	// 실행 파일에 대한 동시 쓰기 접근 거부 함수
+	// 실행중인 파일을 수정하려고 하는 것을 방지
 	file_deny_write(file);
 	/* -------------- project2-3-2_System calls-Process ------------- */
 
@@ -669,7 +669,7 @@ done:
 	// 실제 파일을 닫아야하는 함수인 process_exit()에서 닫자
 	// file_close (file);
 	/* -------------- project2-3-2_System calls-Process ------------- */
-	
+
 	return success;
 }
 

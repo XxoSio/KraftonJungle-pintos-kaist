@@ -201,7 +201,7 @@ exit (int status){
 	// 스레드의 종료 상태를 알 수 있도록 종료 상태를 바꿔줌
 	th->exit_status = status;
 	/* -------------- project2-3-2_System calls-Process ------------- */
-	
+
 	// 종료되는 스레드 이름과 상태를 출력
 	printf("%s: exit(%d)\n", th->name, status);
 	// 스레드 종료
@@ -332,11 +332,13 @@ open (const char *file) {
 	//process_add_file()로 파일 디스크립터 테이블에 저장후 인덱스 반환
 	struct file *f = filesys_open(file);
 	// lock 해제
-	lock_release(&file_lock);
+	// lock_release(&file_lock);
 
 	// 반환받은 파일의 위치가 비었으면 NULL 반환
-	if(f == NULL)
+	if(f == NULL){
+		lock_release(&file_lock);
 		return -1;
+	}
 	else{
 		// process_add_file()로 파일 디스크립터 테이블에 저장후 인덱스 반환
 		int fd = process_add_file(f);
@@ -344,16 +346,17 @@ open (const char *file) {
 		// 반환 받은 인덱스가 -1이라면 파일을 닫음
 		if(fd == -1){
 			// 열었던 파일 닫기
-			close(f);
+			file_close(f);
 		}
 
+		lock_release(&file_lock);
 		// 정상적인 값이라면, 해당 인덱스 반환
 		return fd;
 	}
 }
 
 // 시스템 콜 넘버 : 8
-// fd에 맞는 파일을 열어 해당 파일의 바이트를 반환
+// fd로 열린 파일의 바이트를 반환
 // file_length() 함수 호출
 // fd : 파일 디스크립터 번호
 int
@@ -377,7 +380,7 @@ filesize (int fd) {
 }
 
 // 시스템 콜 넘버 : 9
-// fd에 맞는 파일을 열어 버퍼로 크기 바이트를 읽음
+// fd로 열린 파일에서 버퍼로 크기 바이트를 읽음
 // file_read() 함수 호출
 // fd : 파일 디스크립터 번호
 // buffer : 읽은 데이터를 저장할 버퍼의 주소값

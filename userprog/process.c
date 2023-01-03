@@ -111,7 +111,7 @@ thread *get_child_process(int tid) {
 // 부모 스레드 : 현재 실행중인 사용자 스레드
 // 현재 시스템 콜로 intr_frame 값을 바꾼 상태 -> tf.rsp는 사용자 스택에서 커널 스택으로 변경됨
 // 스레드 이름과 부모 스레드를 이용하여 __do_fork()를 실행해야 함 -> 사용자 스택의 정보를 인터럽트 프레임 안에 넣어 넘겨야함
-// 이를 위해 부모 스레드에 parent_if라는 인터럽트 프레임을 만들고, 넘겨주자! -> thread 구조체에 추가
+// 이를 위해 부모 스레드에 child_if라는 인터럽트 프레임을 만들고, 넘겨주자! -> thread 구조체에 추가
 tid_t
 process_fork (const char *name, struct intr_frame *if_ UNUSED) {
 	/* Clone current thread to new thread.*/

@@ -145,7 +145,7 @@ page_fault (struct intr_frame *f) {
 	if (vm_try_handle_fault (f, fault_addr, user, write, not_present))
 		return;
 #endif
-
+	// bad ptr이 들어오는 경우 -1로 종료
 	exit(-1);
 
 	/* Count page faults. */

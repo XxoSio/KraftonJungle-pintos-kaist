@@ -31,6 +31,11 @@ enum vm_type {
 #include "filesys/page_cache.h"
 #endif
 
+/* ----------------------------------- project3-1_Memory Management ----------------------------------- */
+#include "lib/kernel/hash.h"
+/* ----------------------------------- project3-1_Memory Management ----------------------------------- */
+
+
 struct page_operations;
 struct thread;
 
@@ -40,15 +45,23 @@ struct thread;
  * This is kind of "parent class", which has four "child class"es, which are
  * uninit_page, file_page, anon_page, and page cache (project4).
  * DO NOT REMOVE/MODIFY PREDEFINED MEMBER OF THIS STRUCTURE. */
+ // 가상 메모리에서의 페이지를 의미
 struct page {
 	const struct page_operations *operations;
 	void *va;              /* Address in terms of user space */
 	struct frame *frame;   /* Back reference for frame */
 
 	/* Your implementation */
+	/* ----------------------------------- project3-1_Memory Management ----------------------------------- */
+	// 해시 테이블에 포함하여는 구조체 멤버를 포함
+	struct hash_elem hash_elem;
+
+	bool writable;
+	/* ----------------------------------- project3-1_Memory Management ----------------------------------- */
 
 	/* Per-type data are binded into the union.
 	 * Each function automatically detects the current union */
+	// 여러개의 맴버를 가질 수 있지만, 한번에 맴버중하나의 값만을 가질 수 있음
 	union {
 		struct uninit_page uninit;
 		struct anon_page anon;
@@ -81,11 +94,15 @@ struct page_operations {
 #define destroy(page) \
 	if ((page)->operations->destroy) (page)->operations->destroy (page)
 
+/* ----------------------------------- project3-1_Memory Management ----------------------------------- */
 /* Representation of current process's memory space.
  * We don't want to force you to obey any specific design for this struct.
  * All designs up to you for this. */
 struct supplemental_page_table {
+	// 해시 테이블 선언
+	struct hash hash_table;
 };
+/* ----------------------------------- project3-1_Memory Management ----------------------------------- */
 
 #include "threads/thread.h"
 void supplemental_page_table_init (struct supplemental_page_table *spt);

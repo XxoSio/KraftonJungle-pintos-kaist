@@ -228,6 +228,11 @@ thread_create (const char *name, int priority,
 	t->file_descriptor_index = 2;
 	/* ----------------------------------- project2-3-1_System calls-File Descriptor ----------------------------------- */
 
+	/* ----------------------------------- project3-1_Memory Management ----------------------------------- */
+	// supplemental page table 초기화
+	supplemental_page_table_init(&t->spt);
+	/* ----------------------------------- project3-1_Memory Management ----------------------------------- */
+
 	/* -------------- project2-3-2_System calls-Process ------------- */
 	// 부모에게 자식 리스트 추가
 	struct thread *cur = thread_current();

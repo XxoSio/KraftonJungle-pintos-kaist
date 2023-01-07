@@ -13,6 +13,10 @@
 #include "threads/synch.h"
 /* -------------- project2-3-1_System calls-File Descriptor ------------- */
 
+/* -------------------- project3-1_Memory Management -------------------- */
+#include "vm/vm.h"
+/* -------------------- project3-1_Memory Management -------------------- */
+
 /* ----------------------------------- project1 ----------------------------------- */
 // THREAD_BLOCKED 상태의 스레드를 관리하기 위한 리스트 자료 구조 추가
 static struct list sleep_list;

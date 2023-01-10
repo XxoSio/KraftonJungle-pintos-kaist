@@ -212,7 +212,6 @@ vm_get_frame (void) {
 	ASSERT (frame != NULL);
 	ASSERT (frame->page == NULL);
 
-
 	// 페이지 할당에 실패한 경우 - 메모리의 시작 주소가 NULL인 경우
 	// swap out을 할 필요가 없음 - 일단은 PANIC("todo")으로 표시
 	if (frame->kva == NULL)

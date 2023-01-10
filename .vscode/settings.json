@@ -2,7 +2,11 @@
     "files.associations": {
         "thread.h": "c",
         "hash.h": "c",
-        "interrupt.h": "c"
+        "interrupt.h": "c",
+        "palloc.h": "c",
+        "ostream": "c",
+        "page_cache.h": "c"
     },
-    "C_Cpp.errorSquiggles": "disabled"
+    "C_Cpp.errorSquiggles": "disabled",
+    // "C_Cpp.dimInactiveRegions": false
 }

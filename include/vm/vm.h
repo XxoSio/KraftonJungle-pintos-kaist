@@ -3,20 +3,32 @@
 #include <stdbool.h>
 #include "threads/palloc.h"
 
+/* ----------------------------------- project3-1_Memory Management ----------------------------------- */
+#include "lib/kernel/hash.h"
+#include "threads/vaddr.h"
+#include "threads/mmu.h"
+/* ----------------------------------- project3-1_Memory Management ----------------------------------- */
+
 enum vm_type {
 	/* page not initialized */
 	VM_UNINIT = 0,
 	/* page not related to the file, aka anonymous page */
 	VM_ANON = 1,
-	/* page that realated to the file */
+	/* page that realated to the file */ 
 	VM_FILE = 2,
 	/* page that hold the page cache, for project 4 */
 	VM_PAGE_CACHE = 3,
+
+	// 스택인 경우 구분
+	// PintOS에서는 총 stack의 크기를 1MB(0x100000)로 제한하기 때문에 받아온 주소가 USER_STACK으로부터 1MB 사이에 있는지 확인
+	// VM_ANON || (1 << 3)
+	VM_STACK = 7,
 
 	/* Bit flags to store state */
 
 	/* Auxillary bit flag marker for store information. You can add more
 	 * markers, until the value is fit in the int. */
+	// 저장 정보를 위한 보조 비트 플래그 마커
 	VM_MARKER_0 = (1 << 3),
 	VM_MARKER_1 = (1 << 4),
 
@@ -30,11 +42,6 @@ enum vm_type {
 #ifdef EFILESYS
 #include "filesys/page_cache.h"
 #endif
-
-/* ----------------------------------- project3-1_Memory Management ----------------------------------- */
-#include "lib/kernel/hash.h"
-/* ----------------------------------- project3-1_Memory Management ----------------------------------- */
-
 
 struct page_operations;
 struct thread;
@@ -53,9 +60,12 @@ struct page {
 
 	/* Your implementation */
 	/* ----------------------------------- project3-1_Memory Management ----------------------------------- */
-	// 해시 테이블에 포함하여는 구조체 멤버를 포함
+	// 가상 메모리 페이지에 포함되는 해시 구조체 멤버 선언
 	struct hash_elem hash_elem;
 
+	// 스택 표시
+	bool stack;
+	// 쓰기 가능 여부
 	bool writable;
 	/* ----------------------------------- project3-1_Memory Management ----------------------------------- */
 
@@ -82,6 +92,8 @@ struct frame {
  * This is one way of implementing "interface" in C.
  * Put the table of "method" into the struct's member, and
  * call it whenever you needed. */
+// 페이지 작업에 대한 함수 테이블
+// 
 struct page_operations {
 	bool (*swap_in) (struct page *, void *);
 	bool (*swap_out) (struct page *);

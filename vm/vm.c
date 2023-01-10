@@ -4,13 +4,11 @@
 #include "vm/vm.h"
 #include "vm/inspect.h"
 
-/* ----------------------------------- project3-1_Memory Management ----------------------------------- */
-#include "threads/vaddr.h"
-#include "threads/mmu.h"
-
-uint64_t spt_hash_hash_func (const struct hash_elem *e, void *aux);
-bool spt_hash_less_func (const struct hash_elem *a, const struct hash_elem *b, void *aux);
-/* ----------------------------------- project3-1_Memory Management ----------------------------------- */
+// /* ----------------------------------- project3-1_Memory Management ----------------------------------- */
+// #include "lib/kernel/hash.h"
+// #include "threads/vaddr.h"
+// #include "threads/mmu.h"
+// /* ----------------------------------- project3-1_Memory Management ----------------------------------- */
 
 /* Initializes the virtual memory subsystem by invoking each subsystem's
  * intialize codes. */
@@ -48,34 +46,64 @@ static struct frame *vm_evict_frame (void);
 /* Create the pending page object with initializer. If you want to create a
  * page, do not create it directly and make it through this function or
  * `vm_alloc_page`. */
+// 초기화되지 않은 주어진 타입의 페이지 생성
 // initializer를 사용하여 보류중인 페이지 객체를 만듦
-// 직접 생성하지 말고 이 함수 또는 `vm_alloc_page` 사용
+// 초기화되지 않은 페이지의 swap_in 핸들러는 자동적으로 페이지 타입에 맞게 페이지를 초기화하고 주어진 AUX를 인자로 삼는 INIT 함수를 호출
+// vm.h에 정의되어 있는 VM_TYPE 매크로를 사용하면 편리
 bool
-vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
-		vm_initializer *init, void *aux) {
+vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable, vm_initializer *init, void *aux) {
 
+	// 에러 체크 - VM_TYPE이 VM_UNINIT인 경우 에러
 	ASSERT (VM_TYPE(type) != VM_UNINIT)
 
+	// 현재 스레드의 보조 페이지 테이블 가져오기
 	struct supplemental_page_table *spt = &thread_current ()->spt;
 
 	/* Check wheter the upage is already occupied or not. */
-	// user page의 사용여부 확인
+	// spt_find_page()를 호출하여 upage가 이미 할당 중인지 확인
 	if (spt_find_page (spt, upage) == NULL) {
 		/* TODO: Create the page, fetch the initialier according to the VM type,
 		 * TODO: and then create "uninit" page struct by calling uninit_new. You
 		 * TODO: should modify the field after calling the uninit_new. */
 		// 페이지 생성 후, vm유형에 따라 초기화
-		// uninit_new를 호출하여 uninit 페이지 구조 만들기
-		// uninit_new를 호출한 뒤 필드 수정
-		/* ----------------------------------- project3-1_Memory Management ----------------------------------- */
-		struct page *page = (struct page *)malloc(sizeof(struct page));
+        // uninit_new를 호출하여 uninit 페이지 구조 만들기
+        // uninit_new를 호출한 뒤 필드 수정
+        
+    	/* ------------------------- project3-2-1_Anonymous Page_Lazy Loading for Executable ------------------------ */
+		// 페이지 메모리 할당
+		struct page *page = (struct page *)calloc(1, sizeof(struct page));
 
+		typedef bool(*page_initializer)(struct page *, enum vm_type, void *);
+		page_initializer initializer = NULL;
+
+		// 타입 확인
+		switch (type)
+		{
+			case VM_ANON:
+				// VM_ANON 타입에 맞게 초기화 함수 넣기
+				initializer = anon_initializer;
+				break;
+			case VM_FILE:
+				// VM_FILE 타입에 맞게 초기화 함수 넣기
+				initializer = file_backed_initializer;
+				break;
+		}
+		// uninit_new를 호출하여 uninit 페이지 구조 만들기
+		uninit_new(page, upage, init, type, aux, initializer);
+
+		/* ----------------------------------- project3-1_Memory Management ----------------------------------- */
 		// writable 저장
 		page->writable = writable;
 		/* ----------------------------------- project3-1_Memory Management ----------------------------------- */
 
-		/* TODO: Insert the page into the spt. */
+		// 스택인 경우 구분
+		if (type == VM_STACK)
+			page->stack = true;
 
+		/* TODO: Insert the page into the spt. */
+		// 보조 페이지 테이블에 페이지 삽입
+		return spt_insert_page(spt, page);
+		/* ------------------------- project3-2-1_Anonymous Page_Lazy Loading for Executable ------------------------ */
 	}
 err:
 	return false;
@@ -86,39 +114,52 @@ err:
 // 보조 페이지 테이블에서 가상 주소(va)와 대응되는 페이지 구조체를 찾아서 반환
 struct page *
 spt_find_page (struct supplemental_page_table *spt UNUSED, void *va UNUSED) {
-	struct page *page = NULL;
 	/* TODO: Fill this function. */
-	// 가장 가까운 페이지 경계 주소로 이동
+	struct page *page = (struct page *)calloc(1, sizeof(struct page));
+	struct hash_elem *hash_elem;
+
+	// pg_round_down()를 사용해 가장 가까운 페이지 경계 주소 찾기
+	// -> va가 가리키는 가상 페이지의 시작 포인트(오프셋이 0으로 설정된 va) 반환
 	page->va = pg_round_down(va);
 
-	// page 구조체 멤버 찾기
-	struct hash_elem *check_page_hash_elem = hash_find(&spt->hash_table, &page->hash_elem);
+	// hash_find()를 사용해 보조 테이블에서 hash_elem 구조체 찾기
+	hash_elem = hash_find(&spt->hash_table, &page->hash_elem);
 	
-	// 찾지 못한 경우 NULL 반환
-	if(check_page_hash_elem == NULL)
+	// 에러 체크 - hash_elem가 비어있는 경우
+	if (hash_elem == NULL) {
+		// NULL 리턴
 		return NULL;
-	// 찾은 경우 elem이 포함된 구조체에 대한 포인터를 반환
-	else
-		return hash_entry(check_page_hash_elem, struct page, hash_elem);
+	}
+	// hash_elem가 비어있지 않은 경우
+	else{
+		// hash_elem이 소속되어있는 구조체의 포인터를 반환
+		return hash_entry(hash_elem, struct page, hash_elem);
+	}
 }
 
 /* Insert PAGE into spt with validation. */
 // 인자로 주어진 보조 페이지 테이블에 페이지 구조체를 삽입
 // 주어진 보조 페이지 테이블에서 가상 주소가 존재하지 않는지 검사
 bool
-spt_insert_page (struct supplemental_page_table *spt UNUSED,
-		struct page *page UNUSED) {
+spt_insert_page (struct supplemental_page_table *spt UNUSED, struct page *page UNUSED) {
 	int succ = false;
+	
 	/* TODO: Fill this function. */
-	// 삽입
-	struct hash_elem *check_page_elem = hash_insert(&spt->hash_table, &page->hash_elem);
+	// hash_find()를 사용해 hash_elem 구조체 찾기
+	struct hash_elem *check_page_elem = hash_find(&spt->hash_table, &page->hash_elem);
 
-	if(check_page_elem == NULL)
-		succ = true;
-	else
-		succ = false;
-
-	return succ;
+	// 에러 체크 - check_page_elem이 NULL인 경우
+	if(check_page_elem != NULL)
+		// false 반환
+		return succ;
+	// check_page_elem가 비어있지 않은 경우
+	else{
+		// hash_insert()를 사용하여 보조 테이블에 hash_elem 넣기
+		hash_insert(&spt->hash_table, &page->hash_elem);
+		// 성공한 경우 succ값 true로 변환후 반환
+ 		succ = true;
+		return succ;
+	}
 }
 /* ----------------------------------- project3-1_Memory Management ----------------------------------- */
 
@@ -155,28 +196,33 @@ vm_evict_frame (void) {
 // 프레임을 할당하고 멤버들을 초기화 한 후 프레임 반환
 static struct frame *
 vm_get_frame (void) {
-	// struct frame *frame = NULL;
-	
+	struct frame *frame = NULL;
+
 	/* TODO: Fill this function. */
-	// 프레임 메모리 할당
-	struct frame *frame = malloc(sizeof(struct frame));
-	// user 메모리에서 물리 메모리 페이지 가져오기
+	// frame 메모리 할당
+	frame = (struct frame *)calloc(1, sizeof(struct frame));
+
+	// palloc_get_page()를 사용하여
+	// 4kb만큼 물리 메모리 공간을 잡고 물리 메모리의 시작 주소 리턴 받아 저장
 	frame->kva = palloc_get_page(PAL_USER);
-	// 프레임 페이지 초기화
-	frame->page = NULL;
 
+	// 에러 체크
+	// - 프레임이 NULL인 경우
+	// - 프레임의 페이지가 NULL이 아닌 경우
 	ASSERT (frame != NULL);
-	// ASSERT (frame->page == NULL);
-	ASSERT (frame->kva != NULL);
+	ASSERT (frame->page == NULL);
 
-	// 메모리를 성공적으로 가져온 경우
-	if(frame->kva != NULL)
-		return frame;
-	// ! 가져오지 못한 경우 -> swap out
-	// 일단 지금은 PANIC("todo")로 표시만 해둠
-	else
+
+	// 페이지 할당에 실패한 경우 - 메모리의 시작 주소가 NULL인 경우
+	// swap out을 할 필요가 없음 - 일단은 PANIC("todo")으로 표시
+	if (frame->kva == NULL)
 		PANIC("todo");
+	// 페이지 할당에 성공한 경우
+	else
+		// 해단 프레임 반환
+		return frame;
 }
+/* ----------------------------------- project3-1_Memory Management ----------------------------------- */
 
 /* Growing the stack. */
 static void
@@ -188,17 +234,40 @@ static bool
 vm_handle_wp (struct page *page UNUSED) {
 }
 
+/* ------------------------- project3-2-1_Anonymous Page_Lazy Loading for Executable ------------------------ */
 /* Return true on success */
 bool
-vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
-		bool user UNUSED, bool write UNUSED, bool not_present UNUSED) {
+vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED, bool user UNUSED, bool write UNUSED, bool not_present UNUSED) {
+	// 현재 스레드의 보조 페이지 테이블 가져오기
 	struct supplemental_page_table *spt UNUSED = &thread_current ()->spt;
 	struct page *page = NULL;
+
 	/* TODO: Validate the fault */
 	/* TODO: Your code goes here */
+	// 페이지 폴트 확인 - 유효한 값인지
+	if(is_kernel_vaddr(addr))
+		return false;
 
-	return vm_do_claim_page (page);
+	// 현재 페이지가 없는 경우
+	if (not_present) {
+		// 보조 페이지 테이블에서 주소에 맞는 페이지 가져오기
+        page = spt_find_page(spt, addr);
+
+		// 가져온 페이지가 NULL인 경우
+        if (page == NULL)
+			// false 리턴
+            return false;
+
+		// 페이지에 프레임을 할당하고 mmu 설정
+        if (vm_do_claim_page (page) == false)
+			// 실패한 경우 false 리턴
+            return false;
+    }
+
+	// 성공한 경우 true 리턴
+	return true;
 }
+/* ------------------------- project3-2-1_Anonymous Page_Lazy Loading for Executable ------------------------ */
 
 /* Free the page.
  * DO NOT MODIFY THIS FUNCTION. */
@@ -210,44 +279,69 @@ vm_dealloc_page (struct page *page) {
 
 /* ----------------------------------- project3-1_Memory Management ----------------------------------- */
 /* Claim the page that allocate on VA. */
-// 인자로 주어진 va에 페이지 할당 -> 해당 페이지에 프레임 할당
+// 인자로 주어진 va에 페이지를 할당하고, 해당 페이지에 프레임 할당
 bool
 vm_claim_page (void *va UNUSED) {
 	struct page *page = NULL;
+
 	/* TODO: Fill this function */
+
+	// 에러 체크 - va가 사용자 영역이 아닌 경우
+	ASSERT(is_user_vaddr(va));
+
+	// 현재 스레드 받아오기
 	struct thread *current = thread_current();
-	// spt에서 할당할 페이지의 va 찾아 정보 가져오기
+	// 현재 스레드 보조 페이지 테이블의 va 위치에 있는 페이지 찾기
 	page = spt_find_page(&current->spt, va);
 
-	// 정보를 얻지못한 경우 false 반환
-	if(page == NULL)
+	// 페이지가 NULL인 경우
+	if (page == NULL)
+		// flase 리턴
 		return false;
-
-	// 성공한 경우 vm_do_claim_page() 함수 호출
-	return vm_do_claim_page (page);
+	// 페이지를 성공적으로 가져온 경우
+	else
+		// 찾은 페이지를 인자로 하여 vm_do_claim_page() 리턴
+		// - 페이지에 프레임 할당 & mmu설정
+		return vm_do_claim_page (page);
 }
 
 /* Claim the PAGE and set up the mmu. */
-// 페이지를 할당하고 mmu를 설정
+// 페이지에 물리 메모리 프레임을 할당하고 mmu를 설정
 // mmu : 가상 주소와 물리 주소를 매핑한 정보를 페이지 테이블에 추가해야 하는 것
 static bool
 vm_do_claim_page (struct page *page) {
 	ASSERT (page != NULL);
 
+	// vm_get_frame()를 사용하여 프레임 할당받기
 	struct frame *frame = vm_get_frame ();
-	struct thread * current = thread_current();
+	// 프레임을 할당할 스레드 받아오기
+	struct thread *current = thread_current();
 
-	/* Set links */
+	// 에러 체크 - 프레임이 NULL인 경우
 	ASSERT (frame != NULL);
+
+	// 프레임과 페이지 링크
 	frame->page = page;
 	page->frame = frame;
 
 	/* TODO: Insert page table entry to map page's VA to frame's PA. */
 	// 페이지의 VA를 프레임의 PA에 매핑할 페이지 테이블 항목 삽입
-	if(!pml4_set_page(current->pml4, page->va, frame->kva, page->writable))
-		return false;
+	// pml4_get_page()
+	// -> pml4에서 사용자 가상 주소(UADDR)에 해당하는 물리적 주소를 검색
+	// pml4_set_page()
+	// -> 사용자 가상 페이지(UPAGE)에서 커널 가상 주소(KPAGE)로 식별된 물리적 프레임으로 페이지 맵 레벨 4(PML4)의 매핑을 추가
+	if(pml4_get_page(current->pml4, page->va) == NULL && pml4_set_page(current->pml4, page->va, frame->kva, page->writable)){
+		// stack의 경우 swap_in 과정이 진행되지 않아도 됨
+		if(page->stack == true)
+			return true;
+		else
+			// 페이지 구조체 안의 page_operations 구조체를 통해 swap_int 함수 테이블에 값 넣기
+			return swap_in (page, frame->kva);
+	}
+	// 삽입에 실패한 경우
 	else
-		return swap_in (page, frame->kva);
+		// false 리턴
+		return false;
 }
 
 /* Computes and returns the hash value for hash element E, given

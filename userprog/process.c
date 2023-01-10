@@ -21,6 +21,7 @@
 #ifdef VM
 #include "vm/vm.h"
 #endif
+// #define VM
 
 static void process_cleanup (void);
 static bool load (const char *file_name, struct intr_frame *if_);
@@ -572,6 +573,13 @@ load (const char *file_name, struct intr_frame *if_) {
 		goto done;
 	}
 
+	/* -------------- project2-3-2_System calls-Process ------------- */
+	// 실행중인 파일 저장
+	t->running_file = file;
+	// 실행중인 파일을 수정하려고 하는 것을 방지
+	file_deny_write(file);
+	/* -------------- project2-3-2_System calls-Process ------------- */
+
 	/* Read and verify executable header. */
 	if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
 			|| memcmp (ehdr.e_ident, "\177ELF\2\1\1", 7)
@@ -651,13 +659,6 @@ load (const char *file_name, struct intr_frame *if_) {
 	/* ----------------------------------- project2-1_Argument Passing ----------------------------------- */
 
 	success = true;
-
-	/* -------------- project2-3-2_System calls-Process ------------- */
-	// 실행중인 파일 저장
-	t->running_file = file;
-	// 실행중인 파일을 수정하려고 하는 것을 방지
-	file_deny_write(file);
-	/* -------------- project2-3-2_System calls-Process ------------- */
 
 done:
 	/* We arrive here whether the load is successful or not. */
@@ -881,16 +882,55 @@ install_page (void *upage, void *kpage, bool writable) {
 			&& pml4_set_page (t->pml4, upage, kpage, writable));
 }
 #else
+
+/* ------------------------- project3-2-1_Anonymous Page_Lazy Loading for Executable ------------------------ */
 /* From here, codes will be used after project 3.
  * If you want to implement the function for only project 2, implement it on the
  * upper block. */
-
+// 실행 가능한 파일의 페이지들을 초기화하는 함수이고 page fault가 발생할 때 호출
+// 페이지 구조체와 aux를 인자로 받음
+// aux는 load_segment에서 설정하는 정보
 static bool
 lazy_load_segment (struct page *page, void *aux) {
 	/* TODO: Load the segment from the file */
 	/* TODO: This called when the first page fault occurs on address VA. */
 	/* TODO: VA is available when calling this function. */
+	// 파일 세그먼트를 로드
+    // aux 정보를 사용하여 읽을 파일을 찾고, 최종적으로 세그먼트를 메모리에서 읽어야 함
+    // 첫번째 페이지 오류가 발생할 때 호출
+	
+	// lazy_load_aux를 인자로 받아온 aux로 세팅
+	struct load_aux *lazy_load_aux =  (struct load_aux *)aux;
+
+	// 받아온 aux로 파일을 쓰기 위한 각 변수 세팅
+    size_t page_read_bytes = lazy_load_aux->page_read_bytes;
+    size_t page_zero_bytes = lazy_load_aux->page_read_bytes;
+	struct file *file = lazy_load_aux->file;
+    off_t ofs = lazy_load_aux->ofs;
+
+	// 써야할 파일의 오프셋으로 오프셋 옮기기
+	file_seek (file, ofs);
+
+	// 원하는 파일을 kpage에 로드
+	// 파일을 읽어오지 못한 경우
+    if (file_read (file, page->frame->kva, page_read_bytes) != (int) page_read_bytes){
+		palloc_free_page(page->frame->kva);
+		// false 리턴
+        return false;
+	}
+	else{
+		// 파일을 읽어온 경우
+		// 파일 쓰기 - 4kb중 파일을 쓰고 남는 부분은 0으로 채움
+    	memset (page->frame->kva + page_read_bytes, 0, page_zero_bytes);
+
+		// 메모리 반환
+		free(lazy_load_aux);
+
+		// true 리턴
+    	return true;
+	}
 }
+/* ------------------------- project3-2-1_Anonymous Page_Lazy Loading for Executable ------------------------ */
 
 /* Loads a segment starting at offset OFS in FILE at address
  * UPAGE.  In total, READ_BYTES + ZERO_BYTES bytes of virtual
@@ -906,9 +946,11 @@ lazy_load_segment (struct page *page, void *aux) {
  *
  * Return true if successful, false if a memory allocation error
  * or disk read error occurs. */
+// 메인 루프 안에서 파일로부터 읽을 바이트의 수와 0으로 채워야 할 바이트의 수를 측정
+// 대기 중인 오브젝트를 생성하는 vm_alloc_page_with_initializer함수를 호출
+// vm_alloc_page_with_initializer에 제공할 aux 인자로써 보조 값들을 설정 → 구조체 생성
 static bool
-load_segment (struct file *file, off_t ofs, uint8_t *upage,
-		uint32_t read_bytes, uint32_t zero_bytes, bool writable) {
+load_segment (struct file *file, off_t ofs, uint8_t *upage, uint32_t read_bytes, uint32_t zero_bytes, bool writable) {
 	ASSERT ((read_bytes + zero_bytes) % PGSIZE == 0);
 	ASSERT (pg_ofs (upage) == 0);
 	ASSERT (ofs % PGSIZE == 0);
@@ -917,24 +959,46 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		/* Do calculate how to fill this page.
 		 * We will read PAGE_READ_BYTES bytes from FILE
 		 * and zero the final PAGE_ZERO_BYTES bytes. */
+		// FILE에서 PAGE_READ_BYTES 바이트를 읽음
+		// 마지막 PAGE_ZERO_BYTES 바이트를 0으로 탈출
 		size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
 		size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
 		/* TODO: Set up aux to pass information to the lazy_load_segment. */
-		void *aux = NULL;
-		if (!vm_alloc_page_with_initializer (VM_ANON, upage,
-					writable, lazy_load_segment, aux))
+		// lazy_load_segment에 정보를 전달하도록 aux를 설정
+		/* ------------------------- _Anonymous Page_Lazy Loading for Executable ------------------------ */
+		// aux 메모리 할당 
+		// void *aux = NULL;
+		struct load_aux *load_aux = (struct load_aux *)calloc(1, sizeof(struct load_aux));
+		// aux 세팅		
+		load_aux->page_read_bytes = page_read_bytes;
+		load_aux->page_zero_bytes = page_zero_bytes;
+		load_aux->file = file;
+		load_aux->ofs = ofs;
+
+		// 대기중인 오브젝트 생성 - 초기화되지 않은 주어진 타입의 페이지 생성
+		if (!vm_alloc_page_with_initializer (VM_ANON, upage, writable, lazy_load_segment, load_aux))
 			return false;
 
 		/* Advance. */
 		read_bytes -= page_read_bytes;
 		zero_bytes -= page_zero_bytes;
 		upage += PGSIZE;
+
+		// 다음 파일을 위해 파일을 읽은 바이트만큼 오프셋 이동
+		ofs += page_read_bytes;
+		/* ------------------------- _Anonymous Page_Lazy Loading for Executable ------------------------ */
 	}
+
 	return true;
 }
 
 /* Create a PAGE of stack at the USER_STACK. Return true on success. */
+// USER_STACK에 스택 페이지를 생성
+// 스택 할당 부분이  새로운 메모리 관리 시스템에 적합하도록 수정
+// 첫 스택 페이지는 지연적으로 할당될 필요가 없음
+// 페이지 폴트가 발생하는 것을 기다릴 필요 없이 스택 페이지를 load time 때 커맨드 라인의 인자들과 함께 할당하고 초기화 할 수 있음
+// 스택 확인 → vm.h의 vm_type에 있는 보조 marker(ex : VM_MARKER_0)를 사용할 수 있음
 static bool
 setup_stack (struct intr_frame *if_) {
 	bool success = false;
@@ -944,6 +1008,21 @@ setup_stack (struct intr_frame *if_) {
 	 * TODO: If success, set the rsp accordingly.
 	 * TODO: You should mark the page is stack. */
 	/* TODO: Your code goes here */
+	// 스택을 stack_bottom에 매핑하고 페이지 할당
+	// 성공시 rsp 설정
+
+	// 스택에 페이지 생성
+	if (vm_alloc_page_with_initializer(VM_STACK, stack_bottom, true, NULL, NULL))
+	{	
+		// va에 페이지를 할당하고, 해당 페이지에 프레임 할당하고 mmu 설정
+		if (vm_claim_page(stack_bottom))
+		{	
+			// rsp 설정
+			if_->rsp = USER_STACK;
+			// success를 true로 값 변경
+			success = true;
+		}
+	}
 
 	return success;
 }

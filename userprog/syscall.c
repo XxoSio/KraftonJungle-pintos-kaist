@@ -74,13 +74,24 @@ syscall_init (void) {
 }
 
 /* ----------------------------------- project2-2_User Memory Access ----------------------------------- */
+/* ------------------------------ project3-2-2_Supplemental Page Table - Revisit ------------------------------ */
 // 포인터가 가리키는 주소가 사용자 영역인지 확인
 // 사용자 영역을 벗어난 경우 프로세스 종료
 void check_address(void *addr){
-	if(!is_user_vaddr(addr) || addr == NULL || pml4_get_page(thread_current()->pml4, addr) == NULL){
+	if(!is_user_vaddr(addr) || addr == NULL){
 		exit(-1);
 	}
+
+	#ifdef VM
+	// pml4_get_page()를 호출하여 주소에 pml4로 매핑되어 있는 페이지가 있는지 확인
+	if(pml4_get_page (&thread_current()->pml4, addr) == NULL)
+		// 매핑되어 있는 페이지가 없다면 대기중인 보조 페이지 테이블이 있는지 확인
+		if (spt_find_page(&thread_current()->spt, addr) == NULL)
+			// 보조 페이지 테이블이 없다면 -1로 종료
+			exit(-1);
+	#endif
 }
+/* ------------------------------ project3-2-2_Supplemental Page Table - Revisit ------------------------------ */
 /* ----------------------------------- project2-2_User Memory Access ----------------------------------- */
 
 /* The main system call interface */
@@ -175,6 +186,7 @@ syscall_handler (struct intr_frame *f UNUSED) {
 	// 예외 처리
 	default:
 		exit(-1);
+		break;
 	}
 	/* ----------------------------------- project2-2_User Memory Access ----------------------------------- */
 }

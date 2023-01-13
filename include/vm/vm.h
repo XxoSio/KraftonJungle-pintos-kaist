@@ -19,10 +19,14 @@ enum vm_type {
 	/* page that hold the page cache, for project 4 */
 	VM_PAGE_CACHE = 3,
 
+	/* ------------------------- project3-2-1_Anonymous Page_Lazy Loading for Executable ------------------------ */
 	// 스택인 경우 구분
 	// PintOS에서는 총 stack의 크기를 1MB(0x100000)로 제한하기 때문에 받아온 주소가 USER_STACK으로부터 1MB 사이에 있는지 확인
 	// VM_ANON || (1 << 3)
-	VM_STACK = 7,
+	// ANON 페이지로 만들 UNINIT 페이지를 stack_bottom에서 위로 PGSIZE만큼(1 PAGE) 만듦
+	// 이 때 TYPE에 VM_MARKER_0 flag를 추가함으로써 이 페이지가 STACK에 있다는 것을 표시함
+	VM_STACK = 9,
+	/* ------------------------- project3-2-1_Anonymous Page_Lazy Loading for Executable ------------------------ */
 
 	/* Bit flags to store state */
 
@@ -52,7 +56,7 @@ struct thread;
  * This is kind of "parent class", which has four "child class"es, which are
  * uninit_page, file_page, anon_page, and page cache (project4).
  * DO NOT REMOVE/MODIFY PREDEFINED MEMBER OF THIS STRUCTURE. */
- // 가상 메모리에서의 페이지를 의미
+ // 가상메모리에서의 페이지를 의미
 struct page {
 	const struct page_operations *operations;
 	void *va;              /* Address in terms of user space */
@@ -93,7 +97,6 @@ struct frame {
  * Put the table of "method" into the struct's member, and
  * call it whenever you needed. */
 // 페이지 작업에 대한 함수 테이블
-// 
 struct page_operations {
 	bool (*swap_in) (struct page *, void *);
 	bool (*swap_out) (struct page *);

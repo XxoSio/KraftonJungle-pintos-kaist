@@ -421,10 +421,10 @@ process_exit (void) {
 	for(int i = 0; i < FDT_LIMIT; i++)
 		close(i);
 
-	// thread_create에서 할당한 페이지 할당 해제
-	palloc_free_multiple(curr->file_descriptor_talbe, 3);
 	// 현재 프로세스가 실행중인 파일 종료
 	file_close(curr->running_file);
+	// thread_create에서 할당한 페이지 할당 해제
+	palloc_free_multiple(curr->file_descriptor_talbe, 3);
 	/* -------------- project2-3-2_System calls-Process ------------- */
 
 	// 현재 프로세스의 자원 반납
@@ -904,7 +904,7 @@ lazy_load_segment (struct page *page, void *aux) {
 
 	// 받아온 aux로 파일을 쓰기 위한 각 변수 세팅
     size_t page_read_bytes = lazy_load_aux->page_read_bytes;
-    size_t page_zero_bytes = lazy_load_aux->page_read_bytes;
+    size_t page_zero_bytes = lazy_load_aux->page_zero_bytes;
 	struct file *file = lazy_load_aux->file;
     off_t ofs = lazy_load_aux->ofs;
 
@@ -924,7 +924,7 @@ lazy_load_segment (struct page *page, void *aux) {
     	memset (page->frame->kva + page_read_bytes, 0, page_zero_bytes);
 
 		// 메모리 반환
-		free(lazy_load_aux);
+		// free(lazy_load_aux);
 
 		// true 리턴
     	return true;

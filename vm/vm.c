@@ -4,11 +4,7 @@
 #include "vm/vm.h"
 #include "vm/inspect.h"
 
-// /* ----------------------------------- project3-1_Memory Management ----------------------------------- */
-// #include "lib/kernel/hash.h"
-// #include "threads/vaddr.h"
-// #include "threads/mmu.h"
-// /* ----------------------------------- project3-1_Memory Management ----------------------------------- */
+#include "userprog/process.h"
 
 /* Initializes the virtual memory subsystem by invoking each subsystem's
  * intialize codes. */
@@ -52,7 +48,6 @@ static struct frame *vm_evict_frame (void);
 // vm.h에 정의되어 있는 VM_TYPE 매크로를 사용하면 편리
 bool
 vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable, vm_initializer *init, void *aux) {
-
 	// 에러 체크 - VM_TYPE이 VM_UNINIT인 경우 에러
 	ASSERT (VM_TYPE(type) != VM_UNINIT)
 
@@ -374,15 +369,82 @@ supplemental_page_table_init (struct supplemental_page_table *spt UNUSED) {
 }
 /* ----------------------------------- project3-1_Memory Management ----------------------------------- */
 
+/* ------------------------------ project3-2-2_Supplemental Page Table - Revisit ------------------------------ */
 /* Copy supplemental page table from src to dst */
+// src에서 dst로 보조 페이지 테이블 복사
 bool
-supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
-		struct supplemental_page_table *src UNUSED) {
+supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED, struct supplemental_page_table *src UNUSED) {
+	// 해시 테이블 내의 위치를 나타내는 이터레이터 설정
+    struct hash_iterator iter;
+	// 복사할 해시의 첫번째 요소 바로 앞으로 이터레이터 초기화
+    hash_first(&iter, &src->hash_table);
+
+	// 이터레이터를 해시의 다음 요소로 이동하고 해당 요소를 반환
+    while(hash_next(&iter)){
+		// 복사할 부모 페이지 찾기
+		// hash_entry()를 사용해 복사해야하는 hash_elem과 연결된 page를 찾아서 해당 페이지 구조체 가져오기
+		// hash_cur()를 사용해 이터레이터가 가장 최근에 반환한 값을 가져옴
+        struct page *parent_page = hash_entry(hash_cur(&iter), struct page, hash_elem);
+
+		// 주의!
+		// parent_page->operations->type : 페이지 자체의 타입
+		// parent_page->uninit.type : 초기화 함수로 인자를 넘겨주기 위해 플래그로 계산한 타입
+		// 따라서 페이지의 타입을 찾을때는 operations->type로, 초기화를 위해 타입을 넘겨줄때는 uninit.type을 넘겨줘야 함
+		// 부모 페이지의 타입이 VM_UNINIT이면서 stack이 아닌 경우
+		// - 자식이 가질 새로운 페이지 생성 후 초기화
+		if(parent_page->operations->type == VM_UNINIT && parent_page->stack == false){
+			if(!vm_alloc_page_with_initializer(parent_page->uninit.type, parent_page->va, parent_page->writable, parent_page->uninit.init, parent_page->uninit.aux))
+				return false;
+		}
+		// VM_ANON, VM_FILE, VM_STACK 타입인 경우
+		else{
+			// 이미 해당 타입으로 초기화가 되었으므로
+			// 페이지를 생성한뒤 바로 해당 페이지의 타입에 맞는 initializer를 호출해 페이지 타입을 변경
+			if(!vm_alloc_page_with_initializer(parent_page->uninit.type, parent_page->va, parent_page->writable, NULL, NULL))
+				return false;
+			
+			// 부모 페이지의 물리 메모리 정보를 자식에게도 복사
+			if(!vm_claim_page(parent_page->va))
+				return false;
+			
+			// 부모 페이지를 복사할 자식 페이지 찾아오기
+			struct page *child_page = spt_find_page(dst, parent_page->va);
+			// 부모 페이지의 내용을 자식 페이지로 복사
+			memcpy(child_page->frame->kva, parent_page->frame->kva, PGSIZE);
+		}
+	}
+
+    return true;
+}
+
+void
+destroy_fun (struct hash_elem *e, void *aux UNUSED){
+	// 삭제할 페이지 받아오기
+	struct page *page = hash_entry (e, struct page, hash_elem);
+
+	// 에러체크 - 가져온 페이지가 NULL일 경우
+	ASSERT (page != NULL);
+
+	// destroy()를 사용하여 해당 페이지를 제거
+	destroy (page);
+
+	// 사용한 페이지 메모리 반환
+	free (page);
 }
 
 /* Free the resource hold by the supplemental page table */
+// 보조 페이지 테이블에서 리소스 홀드를 확보
+// supplemental page table에 의해 유지되던 모든 자원들을 free
+// 페이지 엔트리를 반복하면서 테이블의 페이지에 destroy(page)를 호출
 void
 supplemental_page_table_kill (struct supplemental_page_table *spt UNUSED) {
 	/* TODO: Destroy all the supplemental_page_table hold by thread and
 	 * TODO: writeback all the modified contents to the storage. */
+	// 스레드별 supplemental_page_table 홀드를 모두 파괴
+	// 수정된 내용을 모두 저장소에 기록
+
+	// destroy_fun()이 Null이 아닌 경우 해시의 각 요소에 대해 호출하여
+	// hash_init()으로 초기화된 hash의 모든 원소들을 제거
+	hash_clear(&spt->hash_table, destroy_fun);
 }
+/* ------------------------------ project3-2-2_Supplemental Page Table - Revisit ------------------------------ */

@@ -169,8 +169,10 @@ struct thread {
     struct semaphore exit_sys_sema;
     /* -------------- project2-3-2_System calls-Process ------------- */
 
+	/* ----------------------------------- project3-2_Stack Growth ----------------------------------- */
     // 스택의 마지막 부분을 저장해둘 변수
     void *stack_bottom;
+	/* ----------------------------------- project3-2_Stack Growth ----------------------------------- */
 };
 
 /* If false (default), use round-robin scheduler.

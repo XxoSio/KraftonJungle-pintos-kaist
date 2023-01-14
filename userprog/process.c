@@ -1020,8 +1020,10 @@ setup_stack (struct intr_frame *if_) {
             // rsp 설정
             if_->rsp = USER_STACK;
 
+			/* ----------------------------------- project3-2_Stack Growth ----------------------------------- */ 
             // 스택의 끝부분 저장
             thread_current()->stack_bottom = stack_bottom;
+			/* ----------------------------------- project3-2_Stack Growth ----------------------------------- */ 
 
             // success를 true로 값 변경
             success = true;

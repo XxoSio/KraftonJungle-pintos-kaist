@@ -218,7 +218,7 @@ vm_get_frame (void) {
 }
 /* ----------------------------------- project3-1_Memory Management ----------------------------------- */
 
-/* ----------------------------------- project3-2_Stack Growth ----------------------------------- */
+/* ----------------------------------- project3-3_Stack Growth ----------------------------------- */
 /* Growing the stack. */
 static void
 vm_stack_growth (void *addr UNUSED) {
@@ -226,10 +226,11 @@ vm_stack_growth (void *addr UNUSED) {
     if (vm_alloc_page(VM_STACK, addr, 1)) {
         // 할당받은 페이지와 프래임 매핑후 mmu 설정
         vm_claim_page(addr);
+		// 스레드에 저장되어있던 마지막 스택 주소 수정
         thread_current()->stack_bottom -= PGSIZE;
     }
 }
-/* ----------------------------------- project3-2_Stack Growth ----------------------------------- */
+/* ----------------------------------- project3-3_Stack Growth ----------------------------------- */
 
 /* Handle the fault on write_protected page */
 static bool
@@ -247,10 +248,10 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED, bool user U
     /* TODO: Validate the fault */
     /* TODO: Your code goes here */
     // 페이지 폴트 확인 - 유효한 값인지
-    if(is_kernel_vaddr(addr))
+    if(is_kernel_vaddr(addr) || addr == NULL)
         return false;
 
-    /* ----------------------------------- project3-2_Stack Growth ----------------------------------- */
+    /* ----------------------------------- project3-3_Stack Growth ----------------------------------- */
     // 스택의 증가로 page fault를 해결할 수 있는지 확인
     if (f->rsp - 8 <= addr && addr <= USER_STACK && USER_STACK - 0x100000 <= addr) {
         // 스택 증가 함수 호출
@@ -258,7 +259,15 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED, bool user U
         vm_stack_growth(thread_current()->stack_bottom - PGSIZE);
         return true;
     }
-    /* ----------------------------------- project3-2_Stack Growth ----------------------------------- */
+    /* ----------------------------------- project3-3_Stack Growth ----------------------------------- */
+
+	/* page_fault로 부터 넘어온 인자
+	 * f : 페이지 폴트 발생 순간의 레지스터 값들을 담고 있는 구조체
+	 * addr : 페이지 폴트를 일으킨 가상주소
+	 * not_present : 페이지 존재 x (bogus fault), false인 경우 read-only페이지에 write하려는 상황
+	 * user : 유저에 의한 접근(true), 커널에 의한 접근(false) - rsp 값이 유저 영역인지 커널영역인지
+	 * write : 쓰기 목적 접근(true), 읽기 목적 접근(false)
+	*/
 
     // 현재 페이지가 없는 경우
     if (not_present) {
@@ -275,6 +284,13 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED, bool user U
             // 실패한 경우 false 리턴
             return false;
     }
+
+	/* ----------------------------------- project3_Clean up code for testing ----------------------------------- */
+	// 인자로 받은 write가 쓰기가 가능한지, 접근하려는 주소의 페이지가 쓰기가 가능한지 확인
+	if (write && !page->writable)
+		// 아니라면 false 반환
+		return false;
+	/* ----------------------------------- project3_Clean up code for testing ----------------------------------- */
 
     // 성공한 경우 true 리턴
     return true;
@@ -461,9 +477,32 @@ supplemental_page_table_kill (struct supplemental_page_table *spt UNUSED) {
     // 스레드별 supplemental_page_table 홀드를 모두 파괴
     // 수정된 내용을 모두 저장소에 기록
 
+	// struct hash_iterator i;
+	// if (spt->hash_table.buckets != NULL)
+	// {
+	// 	hash_first(&i, &spt->hash_table);
+
+	// 	while(hash_next(&i))
+	// 	{
+	// 		struct page *page = hash_entry(hash_cur(&i), struct page, hash_elem);
+
+	// 		if (page->operations->type == VM_FILE)
+	// 		{
+	// 			do_munmap(page->va);
+	// 		}
+	// 	}
+	// }
+
+	/* ----------------------------------- project3_Clean up code ----------------------------------- */
     // destroy_fun()이 Null이 아닌 경우 해시의 각 요소에 대해 호출하여
     // hash_init()으로 초기화된 hash의 모든 원소들을 제거
-    hash_clear(&spt->hash_table, destroy_fun);
+    // hash_clear(&spt->hash_table, destroy_fun);
+
+	// 메모리 누수를 잡기 위해 hash_clear() 대신 hash_destroy() 사용
+	// 앞에서 supplemental_page_table_init()을 추가하였기 때문에 hash_destroy()를 사용할 수 있음
+	hash_destroy(&spt->hash_table, destroy_fun);
+	/* ----------------------------------- project3_Clean up code ----------------------------------- */
+
 
     // 할당해주었던 aux 메모리 반환
     free(spt->hash_table.aux);

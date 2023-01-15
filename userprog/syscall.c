@@ -30,6 +30,9 @@ unsigned tell (int fd);
 void close (int fd);
 /* ----------------------------------- project2-2_User Memory Access ----------------------------------- */
 
+void *mmap(void *addr, size_t length, int writable, int fd, off_t offset);
+void munmap(void *addr);
+
 /* ----------------------------------- project2-3-1_System calls-File Descriptor ----------------------------------- */
 #include "userprog/process.h"
 #include "filesys/filesys.h"
@@ -93,6 +96,26 @@ void check_address(void *addr){
 }
 /* ------------------------------ project3-2-2_Supplemental Page Table - Revisit ------------------------------ */
 /* ----------------------------------- project2-2_User Memory Access ----------------------------------- */
+
+/* ----------------------------------- project3_Clean up code----------------------------------- */
+// read, write의 경우 접근이 가능한 페이지인지 확인
+void check_buffer(void* buffer, unsigned size, void* rsp, bool write){
+	// 버퍼 주소 확인
+	check_address(buffer);
+
+	// 확인할 주소의 보조 페이지 찾기
+	struct page* page = spt_find_page(&thread_current()->spt, buffer);
+
+	// 페이지를 못찾은 경우
+	if(page == NULL)
+		// -1로 종료
+		exit(-1);
+	// 인자로 받은 write의 권한이 false이고, 접근하려는 페이지의 write의 권한이 false인 경우
+	if(write == false && page->writable == false)
+		// -1로 종료
+		exit(-1);
+}
+/* ----------------------------------- project3_Clean up code ----------------------------------- */
 
 /* The main system call interface */
 void
@@ -158,16 +181,20 @@ syscall_handler (struct intr_frame *f UNUSED) {
 	case SYS_FILESIZE:
 		f->R.rax = filesize(f->R.rdi);
 		break;
+	/* ----------------------------------- project3_Clean up code ----------------------------------- */
 	// 시스템 콜 넘버 : 9
 	// fd로 열린 파일에서 버퍼로 크기 바이트를 읽음
 	case SYS_READ:
+		check_buffer(f->R.rsi, f->R.rdx, f->rsp, 0);
 		f->R.rax = read(f->R.rdi, f->R.rsi, f->R.rdx);
 		break;
 	// 시스템 콜 넘버 : 10
 	// 버퍼에서 열린파일 fd에 크기 바이트를 씀
 	case SYS_WRITE:
+		check_buffer(f->R.rsi, f->R.rdx, f->rsp, 1);
 		f->R.rax = write(f->R.rdi, f->R.rsi, f->R.rdx);
 		break;
+	/* ----------------------------------- project3_Clean up code ----------------------------------- */
 	// 시스템 콜 넘버 : 11
 	// 열린 파일fd에서 읽거나 쓸 다음 바이트를 위치로 변경
 	case SYS_SEEK:
@@ -400,7 +427,7 @@ filesize (int fd) {
 int
 read (int fd, void *buffer, unsigned size) {
 	// read하는 파일의 위치가 사용자 메모리 영역인지 확인
-	check_address(buffer);
+	// check_address(buffer);
 
 	// buffer의 경우 주소값에 배열로 들어옴
 	// 해당 배열값에 접근할 수 있도록 *buf 선언
@@ -451,7 +478,7 @@ read (int fd, void *buffer, unsigned size) {
 int
 write (int fd, const void *buffer, unsigned size) {
 	// write하는 파일의 위치가 사용자 메모리 영역인지 확인
-	check_address(buffer);
+	// check_address(buffer);
 
 	// 쓰려고하는 사이즈를 저장하는 변수 선언
 	int write_size;

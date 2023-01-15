@@ -323,6 +323,14 @@ process_exec (void *f_name) {
     // 지워준다는 것은 프로세스에 할당된 page directory를 지운다는 것
     process_cleanup ();
 
+	/* ----------------------------------- project3_Clean up code ----------------------------------- */
+	// 초기화를 해주고 바로 cleanup을 해주면서 supplemental_page_table_kill()을 불러옴
+	// 해당 함수를 안쓰면 supplemental_page_table_kill()에서 hash_clear()만 사용하여 free를 못해줌
+	// supplemental_page_table_kill()에서 hash_destroy()를 사용하여 free를 해주면서 메모리를 잡아야함
+	// 따라서 메모리 누수를 잡으면서 kill을 해주기 위해 다시 초기화 해주는 함수를 추가
+	supplemental_page_table_init(&thread_current()->spt);
+	/* ----------------------------------- project3_Clean up code ----------------------------------- */
+
     /* ----------------------------------- project2-1_Argument Passing ----------------------------------- */
     /* And then load the binary */
     // _if(intr_frame)와 file_name을 현재 프로세스에 load

@@ -21,7 +21,6 @@
 #ifdef VM
 #include "vm/vm.h"
 #endif
-// #define VM
 
 static void process_cleanup (void);
 static bool load (const char *file_name, struct intr_frame *if_);
@@ -898,7 +897,10 @@ install_page (void *upage, void *kpage, bool writable) {
 // 실행 가능한 파일의 페이지들을 초기화하는 함수이고 page fault가 발생할 때 호출
 // 페이지 구조체와 aux를 인자로 받음
 // aux는 load_segment에서 설정하는 정보
-static bool
+/* ----------------------------------- project3-4_Memory Mapped Files ----------------------------------- */
+// 파일 메모리 매핑때 재사용을 위해 선언
+bool
+/* ----------------------------------- project3-4_Memory Mapped Files ----------------------------------- */
 lazy_load_segment (struct page *page, void *aux) {
     /* TODO: Load the segment from the file */
     /* TODO: This called when the first page fault occurs on address VA. */

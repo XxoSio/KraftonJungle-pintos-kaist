@@ -477,21 +477,28 @@ supplemental_page_table_kill (struct supplemental_page_table *spt UNUSED) {
     // 스레드별 supplemental_page_table 홀드를 모두 파괴
     // 수정된 내용을 모두 저장소에 기록
 
-	// struct hash_iterator i;
-	// if (spt->hash_table.buckets != NULL)
-	// {
-	// 	hash_first(&i, &spt->hash_table);
+    /* ------------------------- project3-4_Memory Mapped Files ------------------------ */
+    // 파일이 종료되는 경우에는 SYS_MUNMAP 시스템 콜을 부르지 않기 때문에
+    // 직접 do_munmap()를 호출하여 매핑을 해제해줘야 함
+    // 이터레이터 선언
+	struct hash_iterator iter;
+    // 복사할 해시의 첫번째 요소 바로 앞으로 이터레이터 초기화
+    hash_first(&iter, &spt->hash_table);
 
-	// 	while(hash_next(&i))
-	// 	{
-	// 		struct page *page = hash_entry(hash_cur(&i), struct page, hash_elem);
+    // 이터레이터를 해시의 다음 요소로 이동하고 해당 요소를 반환
+    while(hash_next(&iter))
+    {
+        // hash_entry()를 사용해 복사해야하는 hash_elem과 연결된 page를 찾아서 해당 페이지 구조체 가져오기
+        struct page *page = hash_entry(hash_cur(&iter), struct page, hash_elem);
 
-	// 		if (page->operations->type == VM_FILE)
-	// 		{
-	// 			do_munmap(page->va);
-	// 		}
-	// 	}
-	// }
+        // 페이지의 타입이 file인 경우
+        if (page->operations->type == VM_FILE)
+        {
+            // 매핑 해제
+            do_munmap(page->va);
+        }
+    }
+    /* ------------------------- project3-4_Memory Mapped Files ------------------------ */
 
 	/* ----------------------------------- project3_Clean up code ----------------------------------- */
     // destroy_fun()이 Null이 아닌 경우 해시의 각 요소에 대해 호출하여
@@ -502,7 +509,6 @@ supplemental_page_table_kill (struct supplemental_page_table *spt UNUSED) {
 	// 앞에서 supplemental_page_table_init()을 추가하였기 때문에 hash_destroy()를 사용할 수 있음
 	hash_destroy(&spt->hash_table, destroy_fun);
 	/* ----------------------------------- project3_Clean up code ----------------------------------- */
-
 
     // 할당해주었던 aux 메모리 반환
     free(spt->hash_table.aux);

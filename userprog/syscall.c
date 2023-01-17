@@ -210,6 +210,18 @@ syscall_handler (struct intr_frame *f UNUSED) {
 	case SYS_CLOSE:
 		close(f->R.rdi);
 		break;
+	/* ----------------------------------- project3-4_Memory Mapped Files ----------------------------------- */
+	// 시스템 콜 넘버 : 14
+	// 파일을 가상 주소에 매핑
+	case SYS_MMAP:
+		f->R.rax = mmap(f->R.rdi, f->R.rsi, f->R.rdx, f->R.r10, f->R.r8);
+		break;
+	// 시스템 콜 넘버 : 15
+	// 파일을 가상 주소에서 매핑 해제
+	case SYS_MUNMAP:
+		munmap(f->R.rdi);
+		break;
+	/* ----------------------------------- project3-4_Memory Mapped Files ----------------------------------- */
 	// 예외 처리
 	default:
 		exit(-1);
@@ -618,9 +630,6 @@ file *process_get_file(int fd){
 // 해당 인덱스 파일의 내용 삭제(초기화)
 void
 process_close_file(int fd){
-	// struct thread *th = thread_current();
-	// struct file **current_fdt = th->file_descriptor_talbe;
-
 	// 지우고자 하는 파일 인덱스의 값이 잘못된 경우 -1 반환
 	if(0 > fd || fd >= FDT_LIMIT)
 		return -1;
@@ -630,3 +639,44 @@ process_close_file(int fd){
 	}
 }
 /* ----------------------------------- project2-3-1_System calls-File Descriptor ----------------------------------- */
+
+/* ----------------------------------- project3-4_Memory Mapped Files ----------------------------------- */
+void *mmap(void *addr, size_t length, int writable, int fd, off_t offset){
+	/* Return NULL의 경우 
+	 * CASE 1. `addr` 가 0인 경우
+	 * CASE 2. `addr` 가 커널 가상 주소인 경우
+	 * CASE 3. `addr` 가 page-aligned 되지 않은 경우
+	 * CASE 4. 기존에 매핑된 페이지 집합(stack, 페이지)과 겹치는 경우
+	 * CASE 5. 읽으려는 파일의 offset 위치가 PGSIZE 보다 큰 경우
+	 * CASE 6. 읽으려는 파일의 길이가 0보다 작거나 같은 경우
+	 * CASE 7. STDIN, STDOUT 인 경우
+	 * CASE 8. 파일 객체가 존재하지 않는 경우
+	 * CASE 9. fd로 열린 파일의 길이가 0인 경우*/
+
+	/* mmap-kernel TC
+	 * kernel = (void *) 0x8004000000 - 0x1000;
+  	 * CHECK (mmap (kernel, -0x8004000000 + 0x1000, 0, handle, 0) == MAP_FAILED,
+     * "try to mmap over kernel 2"); */
+
+	// CASE 1 - 6
+    if (addr == NULL || \
+		is_kernel_vaddr(addr) || is_kernel_vaddr(pg_round_up(addr)) || pg_round_down(addr) != addr || \
+		spt_find_page(&thread_current()->spt, addr)	|| offset > PGSIZE || (long)length <= 0)
+        return NULL;	
+
+    struct file *file = process_get_file(fd);
+
+	// CASE 7 - 9
+    if (fd <= STDOUT_FILENO || file == NULL || file_length(file) == 0)
+        return NULL;
+	
+	// 파일을 가상 주소 addr에 매핑
+	// do_mmap의 4번째 인자가 파일 객체이므로 fd로 부터 파일 객체를 얻은 값을 넣어줌
+    return do_mmap(addr, length, writable, file, offset);
+}
+
+void munmap(void *addr){
+	// addr에 대한 매핑을 해제
+	do_munmap(addr);
+}
+/* ----------------------------------- project3-4_Memory Mapped Files ----------------------------------- */
